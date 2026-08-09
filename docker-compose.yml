@@ -1,0 +1,80 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: cinegenie_postgres
+    environment:
+      POSTGRES_USER: cinegenie
+      POSTGRES_PASSWORD: cinegenie_pass
+      POSTGRES_DB: cinegenie_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cinegenie -d cinegenie_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: cinegenie_chroma
+    volumes:
+      - chroma_data:/chroma/chroma
+    ports:
+      - "8001:8000"
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cinegenie_backend
+    environment:
+      - DATABASE_URL=postgresql://cinegenie:cinegenie_pass@postgres:5432/cinegenie_db
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY:-cinegenie-super-secret-key}
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://frontend:3000
+      - DEBUG=false
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_chroma:/app/chroma_data
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cinegenie_frontend
+    environment:
+      - VITE_API_URL=http://backend:8000/api/v1
+    ports:
+      - "5173:3000"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  chroma_data:
+  backend_uploads:
+  backend_chroma:
