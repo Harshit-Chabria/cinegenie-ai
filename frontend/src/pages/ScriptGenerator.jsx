@@ -6,11 +6,97 @@ import axios from '../api/axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+// ── Clean markdown renderer ───────────────────────────────────────────────────
+const mdComponents = {
+  h1: ({ children }) => (
+    <h1 className="text-xl font-bold text-white mt-6 mb-3 first:mt-0 leading-tight">{children}</h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-base font-bold text-indigo-300 mt-5 mb-2.5 first:mt-0 pb-1.5 border-b border-gray-700 leading-tight">{children}</h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="text-sm font-semibold text-purple-300 mt-4 mb-2 first:mt-0 uppercase tracking-wider">{children}</h3>
+  ),
+  p: ({ children }) => (
+    <p className="text-sm text-gray-200 leading-relaxed mb-3 last:mb-0 whitespace-pre-wrap">{children}</p>
+  ),
+  ul: ({ children }) => (
+    <ul className="my-3 space-y-2">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="my-3 space-y-2 pl-5 list-decimal text-gray-200 text-sm">{children}</ol>
+  ),
+  li: ({ children }) => (
+    <li className="text-sm text-gray-200 leading-relaxed flex items-start gap-2.5">
+      <span className="mt-[7px] w-1.5 h-1.5 rounded-full bg-indigo-400 flex-shrink-0" />
+      <span className="flex-1">{children}</span>
+    </li>
+  ),
+  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+  em: ({ children }) => <em className="italic text-gray-300">{children}</em>,
+  code: ({ inline, children }) =>
+    inline ? (
+      <code className="px-1.5 py-0.5 rounded bg-gray-900 text-indigo-300 text-xs font-mono border border-gray-700">
+        {children}
+      </code>
+    ) : (
+      <code className="text-gray-300 text-xs font-mono">{children}</code>
+    ),
+  pre: ({ children }) => (
+    <pre className="my-3 p-4 rounded-xl bg-gray-900/80 border border-gray-700 overflow-x-auto text-xs font-mono text-gray-300 leading-relaxed">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="my-3 pl-4 border-l-2 border-indigo-500 text-gray-300 italic text-sm bg-indigo-950/20 py-2 pr-3 rounded-r-lg">
+      {children}
+    </blockquote>
+  ),
+  hr: () => <hr className="my-6 border-gray-800" />,
+};
+
+// Clean helper to convert raw JSON strings into formatted Markdown
+const cleanContent = (val) => {
+  if (!val) return '';
+  if (typeof val !== 'string') {
+    try {
+      val = JSON.stringify(val, null, 2);
+    } catch (e) {
+      val = String(val);
+    }
+  }
+
+  const trimmed = val.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      const parts = [];
+      for (const [k, v] of Object.entries(parsed)) {
+        const title = k.replace(/_/g, ' ').toUpperCase();
+        let contentStr = '';
+        if (Array.isArray(v)) {
+          contentStr = v.map(item => typeof item === 'object' ? JSON.stringify(item) : item).join('\n- ');
+          contentStr = '- ' + contentStr;
+        } else if (typeof v === 'object' && v !== null) {
+          contentStr = Object.entries(v).map(([subK, subV]) => `**${subK}**: ${typeof subV === 'object' ? JSON.stringify(subV) : subV}`).join('\n\n');
+        } else {
+          contentStr = String(v);
+        }
+        parts.append ? parts.push(`### 🎬 ${title}\n\n${contentStr}`) : parts.push(`### 🎬 ${title}\n\n${contentStr}`);
+      }
+      return parts.join('\n\n---\n\n');
+    } catch (e) {
+      // Return trimmed as is if parse fails
+    }
+  }
+  return val;
+};
+
 export default function ScriptGenerator() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState('full');
-  
+
   const [formData, setFormData] = useState({
     topic: '',
     duration: '1 minute',
@@ -23,39 +109,63 @@ export default function ScriptGenerator() {
   const handleGenerate = async (e) => {
     e.preventDefault();
     if (!formData.topic) return toast.error('Topic is required');
-    
+
     setLoading(true);
     try {
-      const response = await axios.post('/ai/generate/script', formData);
-      // Dummy response for fallback if API isn't ready
-      const dummyRes = {
-        hook: '# Hook\n\n**VISUAL:** Wide drone shot sweeping over a misty forest at dawn. The camera moves fast, almost frantically.\n\n**AUDIO:** Low, pulsing synth bass. A single crow caws.\n\n**NARRATOR (V.O.):** They told us the woods were empty. They lied.',
-        story: '# Story Body\n\n**VISUAL:** Cut to close up of boots crunching on dry leaves. Reveal SARAH (20s, determined, muddy face) holding a glowing artifact.\n\n**SARAH:** (Breathless) I found it. But it\'s waking up.\n\n**VISUAL:** The artifact pulses with blue light, illuminating the trees. Shadows stretch unnaturally.',
-        dialogue: '# Key Dialogue\n\n**SARAH:** We don\'t have much time.\n**MIKE (RADIO):** Get out of there, Sarah! Now!\n**SARAH:** Not without answers.',
-        ending: '# Ending\n\n**VISUAL:** Sarah stands before a massive, ancient stone door embedded in a cliff face. The artifact fits perfectly into a recess.\n\n**AUDIO:** A deafening grinding sound as the door cracks open. Blinding white light spills out.',
-        cta: '# Call to Action\n\n**TEXT ON SCREEN:** What lies beyond? Discover the truth in the full film.\n\n**NARRATOR (V.O.):** Watch the full short film now on our channel. Subscribe for more.',
-        full_script: '# Complete Script\n\n[Full script content combining the above elements...]',
-        notes: '- Keep lighting moody and high-contrast.\n- Sound design is critical for tension.\n- Cast needs to show authentic exhaustion.',
-        wordCount: 450,
-        estimatedDuration: '1m 20s'
+      const durationMap = {
+        '30 seconds': 0.5, '1 minute': 1, '2 minutes': 2,
+        '3 minutes': 3, '5 minutes': 5, '10 minutes': 10,
+        '15 minutes': 15, '30 minutes': 30
       };
-      
-      setResult(response.data.script || dummyRes);
+      const payload = {
+        topic: formData.topic,
+        duration_minutes: durationMap[formData.duration] || 1,
+        audience: formData.targetAudience || 'General',
+        style: formData.style,
+        platform: formData.platform,
+        additional_context: formData.additionalContext || null,
+      };
+
+      const response = await axios.post('/ai/generate/script', payload);
+      const data = response.data;
+
+      const hook = cleanContent(data.hook);
+      const story = cleanContent(data.story);
+      const dialogue = cleanContent(data.dialogue);
+      const ending = cleanContent(data.ending);
+      const cta = cleanContent(data.call_to_action || data.cta);
+
+      // Build fallback full_script if missing
+      let full_script = cleanContent(data.full_script);
+      if (!full_script || full_script.length < 20) {
+        const sections = [
+          hook ? `### 🎬 HOOK\n\n${hook}` : '',
+          story ? `### 📖 STORY & SCENE FLOW\n\n${story}` : '',
+          dialogue ? `### 💬 DIALOGUE & NARRATION\n\n${dialogue}` : '',
+          ending ? `### 🏁 ENDING\n\n${ending}` : '',
+          cta ? `### 📢 CALL TO ACTION\n\n${cta}` : '',
+        ].filter(Boolean);
+        full_script = sections.join('\n\n---\n\n');
+      }
+
+      const wordCount = data.word_count || (full_script ? full_script.split(/\s+/).length : 0);
+
+      setResult({
+        hook,
+        story,
+        dialogue,
+        ending,
+        cta,
+        full_script,
+        notes: cleanContent(data.production_notes || data.notes),
+        wordCount,
+        estimatedDuration: data.estimated_duration || data.estimatedDuration || formData.duration,
+      });
+
       toast.success('Script generated successfully!');
     } catch (error) {
-      toast.error('Failed to generate script. Using fallback for demonstration.');
-      // Fallback for UI demonstration
-      setResult({
-        hook: '# Hook\n\n**VISUAL:** Wide drone shot sweeping over a misty forest at dawn.\n\n**AUDIO:** Low, pulsing synth bass.\n\n**NARRATOR (V.O.):** They told us the woods were empty. They lied.',
-        story: '# Story Body\n\n**VISUAL:** Cut to close up of boots crunching on dry leaves. Reveal SARAH holding a glowing artifact.\n\n**SARAH:** (Breathless) I found it.',
-        dialogue: '# Key Dialogue\n\n**SARAH:** We don\'t have much time.\n**MIKE (RADIO):** Get out of there, Sarah! Now!',
-        ending: '# Ending\n\n**VISUAL:** Sarah stands before a massive, ancient stone door. The artifact fits perfectly.',
-        cta: '# Call to Action\n\n**TEXT ON SCREEN:** What lies beyond? Subscribe for more.',
-        full_script: '# The Whispering Woods - Full Script\n\n**VISUAL:** Wide drone shot sweeping over a misty forest at dawn.\n\n**AUDIO:** Low, pulsing synth bass.\n\n**NARRATOR (V.O.):** They told us the woods were empty. They lied.\n\n...',
-        notes: '- Keep lighting moody and high-contrast.\n- Sound design is critical for tension.',
-        wordCount: 450,
-        estimatedDuration: '1m 20s'
-      });
+      console.error('Script generation error:', error?.response?.data || error.message);
+      toast.error(error?.response?.data?.detail || 'Failed to generate script.');
     } finally {
       setLoading(false);
     }
@@ -90,6 +200,12 @@ export default function ScriptGenerator() {
     { id: 'cta', label: 'CTA' }
   ];
 
+  const getActiveTabContent = () => {
+    if (!result) return '';
+    if (activeTab === 'full') return result.full_script;
+    return result[activeTab] || 'No content for this section.';
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6 text-gray-100 min-h-screen">
       <div className="flex items-center justify-between mb-8">
@@ -105,7 +221,7 @@ export default function ScriptGenerator() {
           <form onSubmit={handleGenerate} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2"><FileText size={16}/> Topic / Concept</label>
-              <textarea 
+              <textarea
                 required
                 className="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all min-h-[100px]"
                 placeholder="What is this video about?"
@@ -117,7 +233,7 @@ export default function ScriptGenerator() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2"><Clock size={16}/> Duration</label>
-                <select 
+                <select
                   className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
                   value={formData.duration}
                   onChange={e => setFormData({...formData, duration: e.target.value})}
@@ -127,7 +243,7 @@ export default function ScriptGenerator() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2"><Globe size={16}/> Platform</label>
-                <select 
+                <select
                   className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
                   value={formData.platform}
                   onChange={e => setFormData({...formData, platform: e.target.value})}
@@ -139,7 +255,7 @@ export default function ScriptGenerator() {
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2"><Users size={16}/> Target Audience</label>
-              <input 
+              <input
                 type="text"
                 className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
                 placeholder="e.g. Gen Z gamers, tech professionals"
@@ -150,7 +266,7 @@ export default function ScriptGenerator() {
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2"><Video size={16}/> Style</label>
-              <select 
+              <select
                 className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500"
                 value={formData.style}
                 onChange={e => setFormData({...formData, style: e.target.value})}
@@ -161,7 +277,7 @@ export default function ScriptGenerator() {
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2"><Type size={16}/> Additional Context (Optional)</label>
-              <textarea 
+              <textarea
                 className="w-full bg-gray-950 border border-gray-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all min-h-[80px]"
                 placeholder="Specific key phrases, branding, constraints..."
                 value={formData.additionalContext}
@@ -169,8 +285,8 @@ export default function ScriptGenerator() {
               />
             </div>
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={loading}
               className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-600/50 text-white font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 mt-4"
             >
@@ -235,9 +351,9 @@ export default function ScriptGenerator() {
               </div>
 
               {/* Content Area */}
-              <div className="p-6 overflow-y-auto flex-1 prose prose-invert max-w-none prose-headings:text-indigo-300 prose-strong:text-purple-300 prose-p:text-gray-300">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {activeTab === 'full' ? result.full_script : result[activeTab]}
+              <div className="p-6 overflow-y-auto flex-1 max-h-[500px] text-gray-200">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                  {getActiveTabContent()}
                 </ReactMarkdown>
               </div>
 

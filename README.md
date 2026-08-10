@@ -33,7 +33,7 @@
 - FastAPI + Uvicorn
 - SQLAlchemy 2.0 + SQLite (dev) / PostgreSQL (prod)
 - Pydantic v2
-- OpenAI API (GPT-4o / streaming SSE)
+- **Ollama** (local LLM) + Llama 3.2:3b — runs entirely offline, no API key needed
 - ChromaDB for RAG (optional)
 - bcrypt + python-jose for auth
 
@@ -52,7 +52,7 @@
 ### Prerequisites
 - Python 3.12+
 - Node.js 18+
-- OpenAI API key with credits
+- [Ollama](https://ollama.com/download) installed and running locally (free, no API key)
 
 ### 1. Clone & configure
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Filter, MoreVertical, MapPin, Calendar, Users, DollarSign, X } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, MapPin, Calendar, Users, DollarSign, X, FolderOpen } from 'lucide-react';
 import axios from '../api/axios';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';

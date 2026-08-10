@@ -14,7 +14,8 @@ from app.core.config import settings
 class RAGService:
     """
     Retrieval-Augmented Generation service.
-    Uses ChromaDB for vector storage and OpenAI for embeddings.
+    Uses ChromaDB for vector storage and retrieval.
+    Answer generation uses the local Ollama LLM via the OpenAI-compatible API.
     Falls back gracefully if ChromaDB is unavailable.
     """
 
@@ -126,12 +127,15 @@ class RAGService:
             context_chunks = results["documents"][0]
             context = "\n\n---\n\n".join(context_chunks)
 
-            # Generate answer using OpenAI
+            # Generate answer using local Ollama LLM
             from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+            client = AsyncOpenAI(
+                base_url=settings.OLLAMA_BASE_URL,
+                api_key="ollama",  # required by SDK; ignored by Ollama
+            )
 
             response = await client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
+                model=settings.OLLAMA_MODEL,
                 messages=[
                     {
                         "role": "system",

@@ -33,26 +33,31 @@ export default function CaptionGenerator() {
     
     setLoading(true);
     try {
-      const response = await axios.post('/ai/generate/captions', { ...formData, platform });
-      
-      // Dummy response fallback
+      // Map frontend field names → backend schema
+      const payload = {
+        content_description: formData.description,
+        platform:            activePlatform?.name || 'Instagram',
+        tone:                formData.tone,
+        include_hashtags:    formData.includeHashtags,
+        include_emojis:      formData.includeEmojis,
+        include_cta:         formData.includeCTA,
+      };
+      const response = await axios.post('/ai/generate/captions', payload);
+      const data = response.data;
+
       setResult({
-        mainCaption: "Ready to elevate your filmmaking game? 🎬 We just dropped our ultimate guide to cinematic lighting on a budget. You don't need a massive crew or expensive gear to get that Hollywood look—just creativity and a few smart tricks. 💡✨\n\nIn this video, we break down our 3-point lighting setup using only hardware store lights and practicals. The difference is INSANE.\n\nTap the link in our bio to watch the full tutorial and let us know your favorite lighting hack in the comments below! 👇",
-        shortVersion: "Cinematic lighting on a budget. 💡 Tap the link in bio for the full tutorial!",
-        hashtags: ['#Filmmaking', '#Cinematography', '#LightingTutorial', '#IndieFilm', '#ContentCreator', '#BehindTheScenes', '#VideoProduction'],
-        keywords: ['cinematic lighting', 'budget filmmaking', '3 point lighting', 'video tutorial'],
-        tips: "For Instagram, keep the most important hook in the first two lines before the 'more' cutoff. Use emojis sparingly to break up text blocks."
+        mainCaption:  data.caption       || '',
+        shortVersion: data.alt_caption   || data.story_caption || '',
+        hashtags:     data.hashtags      || [],
+        keywords:     data.keywords      || [],
+        tips:         data.platform_tips || '',
+        cta:          data.cta           || '',
+        charCount:    data.character_count || (data.caption || '').length,
       });
       toast.success('Caption generated!');
     } catch (error) {
-      toast.error('Failed to generate. Using sample data.');
-      setResult({
-        mainCaption: "Ready to elevate your filmmaking game? 🎬 We just dropped our ultimate guide to cinematic lighting on a budget. You don't need a massive crew or expensive gear to get that Hollywood look—just creativity and a few smart tricks. 💡✨\n\nTap the link in our bio to watch the full tutorial! 👇",
-        shortVersion: "Cinematic lighting on a budget. 💡 Link in bio!",
-        hashtags: ['#Filmmaking', '#Cinematography', '#LightingTutorial'],
-        keywords: ['cinematic lighting', 'budget filmmaking'],
-        tips: "Keep the hook in the first line."
-      });
+      console.error('Caption error:', error?.response?.data || error.message);
+      toast.error(error?.response?.data?.detail || 'Failed to generate caption.');
     } finally {
       setLoading(false);
     }

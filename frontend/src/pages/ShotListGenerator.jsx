@@ -23,32 +23,45 @@ export default function ShotListGenerator() {
     
     setLoading(true);
     try {
-      const response = await axios.post('/ai/generate/shot-list', formData);
-      // Dummy response fallback
+      // Map frontend field names → backend schema
+      const payload = {
+        script_or_description: formData.script,
+        camera:                formData.camera || 'Any camera',
+        lens:                  formData.lenses || 'Standard zoom',
+        location:              formData.location || 'TBD',
+        crew_size:             parseInt(formData.crewSize) || 3,
+        additional_notes:      formData.notes || null,
+      };
+      const response = await axios.post('/ai/generate/shot-list', payload);
+      const data = response.data;
+
+      // Map backend field names → frontend display format
+      const shots = (data.shots || []).map((s, i) => ({
+        id:       s.shot_number || i + 1,
+        type:     s.shot_type   || s.type   || '—',
+        angle:    s.angle       || '—',
+        movement: s.movement    || '—',
+        lens:     s.lens        || '—',
+        lighting: s.lighting    || '—',
+        audio:    s.audio       || '—',
+        notes:    s.notes       || '—',
+        duration: s.estimated_duration || s.duration || '—',
+        priority: s.priority    || 'Medium',
+      }));
+
       setResult({
-        shots: [
-          { id: 1, type: 'Wide Shot (WS)', angle: 'High Angle', movement: 'Drone Push-in', lens: '24mm', lighting: 'Natural Dawn', audio: 'Ambience only', notes: 'Establish location, moody feel', duration: '5s', priority: 'High' },
-          { id: 2, type: 'Medium Close Up (MCU)', angle: 'Eye Level', movement: 'Static/Tripod', lens: '50mm', lighting: 'Soft Key, Blue Backlight', audio: 'Dialogue', notes: 'Actor reaction shot', duration: '3s', priority: 'High' },
-          { id: 3, type: 'Insert / Extreme Close Up', angle: 'Top Down', movement: 'Slider Right', lens: '100mm Macro', lighting: 'Hard Spotlight', audio: 'Foley', notes: 'Hand picking up object', duration: '2s', priority: 'Medium' },
-          { id: 4, type: 'Over The Shoulder (OTS)', angle: 'Eye Level', movement: 'Handheld', lens: '35mm', lighting: 'Motivated practical', audio: 'Dialogue', notes: 'Tense conversation', duration: '8s', priority: 'High' },
-          { id: 5, type: 'Wide Shot (WS)', angle: 'Low Angle', movement: 'Steadicam tracking backward', lens: '16mm', lighting: 'Silhouette', audio: 'Heavy breathing', notes: 'Subject running away', duration: '10s', priority: 'Medium' },
-        ],
-        equipmentNeeded: ['Drone', 'Tripod', 'Slider', 'Steadicam/Gimbal', 'Macro Lens', 'Blue Gel/LED Tube', 'Shotgun Mic'],
-        summary: { totalShots: 5, estimatedTime: '28s' }
+        shots,
+        equipmentNeeded: data.equipment_needed || [],
+        summary: {
+          totalShots:    shots.length,
+          estimatedTime: data.estimated_total_duration || `${shots.length * 5}s`,
+        },
+        productionNotes: data.production_notes || '',
       });
-      toast.success('Shot list generated!');
+      toast.success(`Shot list generated! ${shots.length} shots ready.`);
     } catch (error) {
-      toast.error('Using fallback data for demonstration');
-      setResult({
-        shots: [
-          { id: 1, type: 'Wide Shot (WS)', angle: 'High Angle', movement: 'Drone Push-in', lens: '24mm', lighting: 'Natural Dawn', audio: 'Ambience only', notes: 'Establish location, moody feel', duration: '5s', priority: 'High' },
-          { id: 2, type: 'Medium Close Up (MCU)', angle: 'Eye Level', movement: 'Static/Tripod', lens: '50mm', lighting: 'Soft Key, Blue Backlight', audio: 'Dialogue', notes: 'Actor reaction shot', duration: '3s', priority: 'High' },
-          { id: 3, type: 'Insert / Extreme Close Up', angle: 'Top Down', movement: 'Slider Right', lens: '100mm Macro', lighting: 'Hard Spotlight', audio: 'Foley', notes: 'Hand picking up object', duration: '2s', priority: 'Medium' },
-          { id: 4, type: 'Over The Shoulder (OTS)', angle: 'Eye Level', movement: 'Handheld', lens: '35mm', lighting: 'Motivated practical', audio: 'Dialogue', notes: 'Tense conversation', duration: '8s', priority: 'High' },
-        ],
-        equipmentNeeded: ['Drone', 'Tripod', 'Slider', 'Macro Lens', 'Blue Gel/LED Tube', 'Shotgun Mic'],
-        summary: { totalShots: 4, estimatedTime: '18s' }
-      });
+      console.error('Shot list error:', error?.response?.data || error.message);
+      toast.error(error?.response?.data?.detail || 'Failed to generate shot list.');
     } finally {
       setLoading(false);
     }

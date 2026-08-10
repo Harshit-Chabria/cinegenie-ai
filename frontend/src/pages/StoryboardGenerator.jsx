@@ -21,39 +21,42 @@ export default function StoryboardGenerator() {
     
     setLoading(true);
     try {
-      const response = await axios.post('/ai/generate/storyboard', formData);
-      // Dummy response fallback
+      // Map frontend field names → backend schema
+      const payload = {
+        script_or_description: formData.script,
+        num_scenes:            parseInt(formData.numScenes) || 6,
+        style:                 formData.visualStyle,
+        mood:                  formData.mood,
+      };
+      const response = await axios.post('/ai/generate/storyboard', payload);
+      const data = response.data;
+
+      // Map backend scene fields → frontend format
+      const scenes = (data.scenes || []).map((s, i) => ({
+        id:          s.scene_number || i + 1,
+        title:       s.title        || `Scene ${i + 1}`,
+        characters:  s.characters   || '—',
+        camera:      s.camera       || s.movement || '—',
+        composition: s.composition  || '—',
+        lighting:    s.lighting     || '—',
+        mood:        s.mood         || formData.mood,
+        palette:     s.color_palette || '—',
+        prompt:      s.image_prompt  || '',
+        dialogue:    s.dialogue      || '',
+        duration:    s.duration      || '—',
+      }));
+
       setResult({
-        moodText: "A high-tension, cinematic sequence heavily utilizing shadows and cool tones, contrasted with bursts of warm practical lights.",
+        moodText:     data.overall_mood   || '',
+        colorStory:   data.color_story    || '',
+        references:   data.visual_references || [],
         colorPalette: ['#0f172a', '#1e3a8a', '#94a3b8', '#f59e0b', '#dc2626'],
-        scenes: Array.from({ length: parseInt(formData.numScenes) || 6 }).map((_, i) => ({
-          id: i + 1,
-          title: `Scene ${i + 1}`,
-          characters: "Sarah, The Entity",
-          camera: i % 2 === 0 ? "Tracking Wide" : "Extreme Close Up",
-          composition: "Rule of thirds, character placed on right intersection looking left into empty space.",
-          lighting: "Low-key lighting, strong rim light from the right.",
-          prompt: `Cinematic film still, ${formData.visualStyle} style, ${formData.mood} mood, character looking into empty space, strong rim lighting, highly detailed, 8k --ar 16:9`,
-          dialogue: "We can't stay here."
-        }))
+        scenes,
       });
-      toast.success('Storyboard generated!');
+      toast.success(`Storyboard generated! ${scenes.length} scenes ready.`);
     } catch (error) {
-      toast.error('Using sample data.');
-      setResult({
-        moodText: "A high-tension, cinematic sequence heavily utilizing shadows.",
-        colorPalette: ['#0f172a', '#1e3a8a', '#94a3b8', '#f59e0b'],
-        scenes: [1,2,3,4,5,6].map(i => ({
-          id: i,
-          title: `Scene ${i}`,
-          characters: "Main Character",
-          camera: "Wide Shot",
-          composition: "Symmetrical framing",
-          lighting: "Chiaroscuro",
-          prompt: `Cinematic film still, ${formData.visualStyle} style, 8k --ar 16:9`,
-          dialogue: "..."
-        }))
-      });
+      console.error('Storyboard error:', error?.response?.data || error.message);
+      toast.error(error?.response?.data?.detail || 'Failed to generate storyboard.');
     } finally {
       setLoading(false);
     }

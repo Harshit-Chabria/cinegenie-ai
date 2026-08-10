@@ -18,10 +18,21 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./cinegenie.db"
 
-    # OpenAI
+    # -------------------------------------------------------------------
+    # LLM Backend — Ollama (local) via OpenAI-compatible API
+    # Set OLLAMA_BASE_URL and OLLAMA_MODEL in your .env file.
+    # The openai Python SDK is reused with a custom base_url pointing at
+    # the local Ollama server so no API key is required.
+    # -------------------------------------------------------------------
+    OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
+    OLLAMA_MODEL: str = "llama3.2:3b"
+    LLM_MAX_TOKENS: int = 4000
+
+    # Legacy OpenAI settings kept for backward compatibility.
+    # They are NOT used when OLLAMA_BASE_URL is set.
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o"
-    OPENAI_MAX_TOKENS: int = 4000
+    OPENAI_MAX_TOKENS: int = 4000  # alias; prefer LLM_MAX_TOKENS
 
     # ChromaDB
     CHROMA_HOST: str = "localhost"
