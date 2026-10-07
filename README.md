@@ -57,8 +57,8 @@
 ### 1. Clone & configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/CineGenie-AI.git
-cd CineGenie-AI
+git clone https://github.com/Harshit-Chabria/cinegenie-ai.git
+cd cinegenie-ai
 ```
 
 Copy and edit the backend environment file:
@@ -67,10 +67,10 @@ Copy and edit the backend environment file:
 cp backend/.env.example backend/.env
 ```
 
-Edit `backend/.env` and add your OpenAI key:
+Pull the local model (no API key needed):
 
-```env
-OPENAI_API_KEY=sk-proj-your-key-here
+```bash
+ollama pull llama3.2:3b
 ```
 
 ### 2. Start the Backend
@@ -139,8 +139,8 @@ CineGenie-AI/
 |----------|-------------|---------|
 | `SECRET_KEY` | JWT signing key | change-me |
 | `DATABASE_URL` | SQLAlchemy DB URL | `sqlite:///./cinegenie.db` |
-| `OPENAI_API_KEY` | Your OpenAI key | required |
-| `OPENAI_MODEL` | Model name | `gpt-4o` |
+| `OLLAMA_BASE_URL` | Ollama server URL | `http://localhost:11434/v1` |
+| `OLLAMA_MODEL` | Local model name | `llama3.2:3b` |
 | `ALLOWED_ORIGINS` | CORS origins | `http://localhost:5173` |
 
 ### Frontend (`frontend/.env`)
@@ -157,4 +157,4 @@ MIT
 
 ---
 
-Made with ❤️ by the CineGenie team
+Built by [Harshit Chabria](https://github.com/Harshit-Chabria)
